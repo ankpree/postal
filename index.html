@@ -1,0 +1,907 @@
+﻿<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+        <title>Postal Room</title>
+
+        <!-- Babylon.js -->
+        <script src="https://preview.babylonjs.com/ammo.js"></script>
+        <script src="https://preview.babylonjs.com/cannon.js"></script>
+        <script src="https://preview.babylonjs.com/Oimo.js"></script>
+        <script src="https://preview.babylonjs.com/earcut.min.js"></script>
+        <script src="https://preview.babylonjs.com/babylon.js"></script>
+        <script src="https://preview.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+        <script src="https://preview.babylonjs.com/proceduralTexturesLibrary/babylonjs.proceduralTextures.min.js"></script>
+        <script src="https://preview.babylonjs.com/postProcessesLibrary/babylonjs.postProcess.min.js"></script>
+        <script src="https://preview.babylonjs.com/loaders/babylonjs.loaders.js"></script>
+        <script src="https://preview.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
+        <script src="https://preview.babylonjs.com/gui/babylon.gui.min.js"></script>
+        <script src="https://preview.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
+        <script src="https://preview.babylonjs.com/loaders/babylon.objFileLoader.js"></script>
+        <style>
+            html, body {
+                overflow: hidden;
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+
+            #renderCanvas {
+                width: 100%;
+                height: 100%;
+                touch-action: none;
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="renderCanvas"></canvas>
+        <script>
+            var canvas = document.getElementById("renderCanvas");
+            var engine = null;
+            var scene = null;
+            var sceneToRender = null;
+            var createDefaultEngine = function() { return new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true,  disableWebGL2Support: false}); };
+            var createScene = async function () {
+                var scene = new BABYLON.Scene(engine);
+                var groundList =[];
+                var maxScale =10;
+                var minScale =1;
+                var maxDistance =15;
+                var minDistance =.1;
+                var factor=1;
+                var movingAction = false;
+                var emptyMesh =BABYLON.MeshBuilder.CreateBox("emptyBox",{size:1},scene);
+                emptyMesh.position = new BABYLON.Vector3(0,500,0);
+                var trackingMesh;
+                var pointerPos = new BABYLON.Vector2();
+                var camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0,3,-10), scene);
+                camera.setTarget(new BABYLON.Vector3(0,3,0));
+                camera.attachControl(canvas, true);
+                camera.invertRotation =true;
+                camera.fov = 1.0;
+                camera.minZ =0.01;
+                fov_min = 0.5;
+                fov_max = 1.0;
+                var zoomedIn =false;
+                scene.onPointerObservable.add((pointerInfo) => {
+		            switch (pointerInfo.type) {
+			            case BABYLON.PointerEventTypes.POINTERDOUBLETAP:
+				            console.log("POINTER DOUBLE-TAP");
+                            if(!zoomedIn){
+                                camera.fov = fov_min;
+                                zoomedIn =true;
+                            } else {
+                                camera.fov = fov_max;
+                                zoomedIn =false;
+                            }
+				            break;
+                    }
+                });
+                scene.onPrePointerObservable.add( function(pointerInfo, eventState)
+                {
+                var event = pointerInfo.event;
+                var delta = 0;
+                if (event.wheelDelta) {
+                    delta = event.wheelDelta;
+                }
+                else if (event.detail) {
+                    delta = -event.detail;
+                }
+                delta = Math.max(-1, Math.min(1, delta));
+                delta *= -1;
+                if (delta) {
+                    camera.fov += delta/20;
+                    camera.fov = Math.max(fov_min, Math.min(fov_max, camera.fov));
+                }
+                if(camera.fov == fov_min){
+                    zoomedIn =true;
+                }
+                if(camera.fov == fov_max){
+                    zoomedIn =false;
+                }
+                });
+                var lightD = new BABYLON.DirectionalLight("DirectionalLight", new BABYLON.Vector3(1, 1, 1), scene);
+                lightD.intensity =.1;
+                var lightD2 = new BABYLON.DirectionalLight("DirectionalLight", new BABYLON.Vector3(-1, -1, -1), scene);
+                lightD2.intensity =.1;
+                var light1 = new BABYLON.PointLight("pointLight",new BABYLON.Vector3(0,8,0));
+                light1.intensity =1;
+                var alphaMaterial = .0001;
+                var groundZeroMaterial = new BABYLON.StandardMaterial("groundZeroMaterial",scene);
+                groundZeroMaterial.diffuseColor =new BABYLON.Color3(.9, .9, .9); 
+                groundZeroMaterial.specularColor = new BABYLON.Color3(0,0,0); 
+                groundZeroMaterial.alpha = alphaMaterial;
+                var groundMaterial = new BABYLON.StandardMaterial("groundMaterial",scene);
+                groundMaterial.diffuseColor = new BABYLON.Color3(.6,.2,.2); 
+                groundMaterial.specularColor = new BABYLON.Color3(0,0,0); 
+                groundMaterial.alpha =alphaMaterial;
+                var wallMaterial = new BABYLON.StandardMaterial("wallMaterial",scene);
+                wallMaterial.diffuseColor = new BABYLON.Color3(0.71, 0.82, 1);
+                wallMaterial.specularColor = new BABYLON.Color3(0,0,0);
+                wallMaterial.alpha = alphaMaterial;
+                var roofMaterial = new BABYLON.StandardMaterial("roofMaterial",scene);
+                roofMaterial.diffuseColor = new BABYLON.Color3(0.9, .8, 0.64);
+                roofMaterial.specularColor = new BABYLON.Color3(0,0,0);
+                roofMaterial.alpha =alphaMaterial;
+                var woodMaterial = new BABYLON.StandardMaterial("woodMaterial",scene);
+                woodMaterial.diffuseColor = new BABYLON.Color3(0.58, .3, 0);
+                woodMaterial.specularColor = new BABYLON.Color3(0,0,0);
+                woodMaterial.alpha =alphaMaterial;
+                var transparentMaterial = new BABYLON.StandardMaterial("transparentMaterial",scene);
+                transparentMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
+                transparentMaterial.specularColor = new BABYLON.Color3(0,0,0);
+                transparentMaterial.alpha =.95;
+                var testingMaterial = new BABYLON.StandardMaterial("testingMaterial",scene);
+                testingMaterial.diffuseColor = new BABYLON.Color3(0.71, 0.82, 1);
+                testingMaterial.specularColor = new BABYLON.Color3(0,0,0);
+                testingMaterial.alpha = .5;
+                var advancedTextureFullScreen = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+                var disclaimerText = new BABYLON.GUI.TextBlock();
+                disclaimerText.width = "600px"
+                disclaimerText.height = "40px";
+                disclaimerText.textHorizontalAlignment = 0;
+                disclaimerText.text = "This demo is for internal use and testing purpose only."
+                disclaimerText.fontWeight = "bold";
+                disclaimerText.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_LEFT;
+                disclaimerText.verticalAlignment = BABYLON.GUI.Container.VERTICAL_ALIGNMENT_TOP;
+                advancedTextureFullScreen.addControl(disclaimerText);
+                var bgm = new BABYLON.Sound("BGM", "Content/Common/BGM.mp3", scene, null, {
+                    loop: true,
+                    autoplay: false
+                });
+                let playBGM = function(){
+                    bgm.play();
+                }
+                let stopBGM = function(){
+                    bgm.stop();
+                }
+                var buttonBGM_ON = BABYLON.GUI.Button.CreateImageOnlyButton(
+                    "buttonBGM_ON",
+                    "Content/Common/buttonBGM_ON.png"
+                ); 
+                buttonBGM_ON.leftInPixels =-150;
+                buttonBGM_ON.widthInPixels = 50;
+                buttonBGM_ON.heightInPixels = 50;
+                buttonBGM_ON.thickness =0;
+                buttonBGM_ON.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_RIGHT;
+                buttonBGM_ON.verticalAlignment = BABYLON.GUI.Container.VERTICAL_ALIGNMENT_TOP;
+                advancedTextureFullScreen.addControl(buttonBGM_ON);
+                var buttonBGM_OFF = BABYLON.GUI.Button.CreateImageOnlyButton(
+                    "buttonBGM_OFF",
+                    "Content/Common/buttonBGM_OFF.png"
+                ); 
+                buttonBGM_OFF.leftInPixels =-150;
+                buttonBGM_OFF.widthInPixels = 50;
+                buttonBGM_OFF.heightInPixels = 50;
+                buttonBGM_OFF.thickness =0;
+                buttonBGM_OFF.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_RIGHT;
+                buttonBGM_OFF.verticalAlignment = BABYLON.GUI.Container.VERTICAL_ALIGNMENT_TOP;
+                buttonBGM_ON.onPointerClickObservable.add((evt) =>{
+                    buttonBGM_OFF.isVisible =true;
+                    buttonBGM_ON.isVisible =false;
+                    stopBGM(); 
+                })
+                buttonBGM_OFF.onPointerClickObservable.add((evt) =>{
+                    buttonBGM_ON.isVisible =true;
+                    buttonBGM_OFF.isVisible =false;
+                    playBGM(); 
+                })
+                advancedTextureFullScreen.addControl(buttonBGM_OFF);
+                let playerWidth = 15;
+                let playerHeight = 15;
+                let floorWidth = 150;
+                let floorHeight = 150;
+                let telportableWidth = 26;
+                let telportableHeight = 26;
+                let conversionFactor = floorWidth/telportableWidth;
+                let factorX = -floorWidth  + (conversionFactor*telportableWidth/2)-(playerWidth/2);
+                let factorY = floorHeight  - (conversionFactor*telportableHeight/2)+(playerHeight/2);
+                let floorLayoutImage = new BABYLON.GUI.Image("floorLayoutImage","Content/Common/floorLayout.png");
+                floorLayoutImage.widthInPixels = floorWidth;
+                floorLayoutImage.heightInPixels = floorHeight;
+                floorLayoutImage.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_RIGHT;
+                floorLayoutImage.verticalAlignment = BABYLON.GUI.Container.VERTICAL_ALIGNMENT_TOP;
+                advancedTextureFullScreen.addControl(floorLayoutImage);
+                let playerIndicator = new BABYLON.GUI.Image("playerIndicator","Content/Common/playerIndicator.png");
+                playerIndicator.widthInPixels = playerWidth;
+                playerIndicator.heightInPixels = playerHeight;
+                playerIndicator.leftInPixels = factorX + playerIndicator.widthInPixels+camera.position.x*conversionFactor;
+                playerIndicator.topInPixels = factorY - playerIndicator.heightInPixels-camera.position.z*conversionFactor;
+                playerIndicator.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_RIGHT;
+                playerIndicator.verticalAlignment = BABYLON.GUI.Container.VERTICAL_ALIGNMENT_TOP;
+                advancedTextureFullScreen.addControl(playerIndicator);
+                var gtMenuPanel = new BABYLON.GUI.Container();
+                gtMenuPanel.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_LEFT;
+                gtMenuPanel.verticalAlignment = BABYLON.GUI.Container.VERTICAL_ALIGNMENT_BOTTOM;
+                gtMenuPanel.width = "500px";
+                gtMenuPanel.height = "80px";
+                var buttonGTmenu = BABYLON.GUI.Button.CreateImageOnlyButton(
+                    "buttonGTmenu",
+                    "Content/Common/gtMenu.png"
+                ); 
+                buttonGTmenu.widthInPixels = 50;
+                buttonGTmenu.heightInPixels = 50;
+                buttonGTmenu.thickness =0;
+                buttonGTmenu.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_LEFT;
+                buttonGTmenu.leftInPixels =0;
+                gtMenuPanel.addControl(buttonGTmenu);
+                var buttonGTmenuClose = BABYLON.GUI.Button.CreateImageOnlyButton(
+                    "buttonGTmenuClose",
+                    "Content/Common/gtMenuClose.png"
+                ); 
+                buttonGTmenuClose.widthInPixels = 50;
+                buttonGTmenuClose.heightInPixels = 50;
+                buttonGTmenuClose.thickness =0;
+                buttonGTmenuClose.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_LEFT;
+                buttonGTmenuClose.leftInPixels =0;
+                gtMenuPanel.addControl(buttonGTmenuClose);
+                var buttonGTmenuPlay = BABYLON.GUI.Button.CreateImageOnlyButton(
+                    "buttonGTmenuPlay",
+                    "Content/Common/gtMenuPlay.png"
+                ); 
+                buttonGTmenuPlay.widthInPixels = 50;
+                buttonGTmenuPlay.heightInPixels = 50;
+                buttonGTmenuPlay.thickness =0;
+                buttonGTmenuPlay.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_LEFT;
+                buttonGTmenuPlay.leftInPixels =60;
+                gtMenuPanel.addControl(buttonGTmenuPlay);
+                var buttonGTmenuPause = BABYLON.GUI.Button.CreateImageOnlyButton(
+                    "buttonGTmenuPause",
+                    "Content/Common/gtMenuPause.png"
+                ); 
+                buttonGTmenuPause.widthInPixels = 50;
+                buttonGTmenuPause.heightInPixels = 50;
+                buttonGTmenuPause.thickness =0;
+                buttonGTmenuPause.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_LEFT;
+                buttonGTmenuPause.leftInPixels =60;
+                gtMenuPanel.addControl(buttonGTmenuPause);
+                var buttonGTmenuStop = BABYLON.GUI.Button.CreateImageOnlyButton(
+                    "buttonGTmenuStop",
+                    "Content/Common/gtMenuStop.png"
+                ); 
+                buttonGTmenuStop.widthInPixels = 50;
+                buttonGTmenuStop.heightInPixels = 50;
+                buttonGTmenuStop.thickness =0;
+                buttonGTmenuStop.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_LEFT;
+                buttonGTmenuStop.leftInPixels =120;
+                gtMenuPanel.addControl(buttonGTmenuStop);
+                var buttonGTmenuPrev = BABYLON.GUI.Button.CreateImageOnlyButton(
+                    "buttonGTmenuPrev",
+                    "Content/Common/gtMenuPrev.png"
+                ); 
+                buttonGTmenuPrev.widthInPixels = 50;
+                buttonGTmenuPrev.heightInPixels = 50;
+                buttonGTmenuPrev.thickness =0;
+                buttonGTmenuPrev.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_LEFT;
+                buttonGTmenuPrev.leftInPixels =180;
+                gtMenuPanel.addControl(buttonGTmenuPrev);
+                var buttonGTmenuNext = BABYLON.GUI.Button.CreateImageOnlyButton(
+                    "buttonGTmenuNext",
+                    "Content/Common/gtMenuNext.png"
+                ); 
+                buttonGTmenuNext.widthInPixels = 50;
+                buttonGTmenuNext.heightInPixels = 50;
+                buttonGTmenuNext.thickness =0;
+                buttonGTmenuNext.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_LEFT;
+                buttonGTmenuNext.leftInPixels =240;
+                gtMenuPanel.addControl(buttonGTmenuNext);
+                advancedTextureFullScreen.addControl(gtMenuPanel);
+                let blackScreenUI = new BABYLON.GUI.Image("blackScreenUI","Content/Common/blackScreenUI.png");
+                blackScreenUI.stretch = BABYLON.GUI.Image.STRETCH_FILL;
+                blackScreenUI.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_CENTER;
+                blackScreenUI.verticalAlignment = BABYLON.GUI.Container.VERTICAL_ALIGNMENT_CENTER;
+                advancedTextureFullScreen.addControl(blackScreenUI);
+                let closeBlackScreenUIBTN = BABYLON.GUI.Button.CreateImageOnlyButton(
+                    "closeBlackScreenUIBTN",
+                    "Content/Common/closeBlackScreenUIBTN.png"
+                ); 
+                closeBlackScreenUIBTN.widthInPixels = 100;
+                closeBlackScreenUIBTN.heightInPixels = 100;
+                closeBlackScreenUIBTN.thickness =0;
+                closeBlackScreenUIBTN.horizontalAlignment = BABYLON.GUI.Container.HORIZONTAL_ALIGNMENT_RIGHT;
+                closeBlackScreenUIBTN.verticalAlignment = BABYLON.GUI.Container.VERTICAL_ALIGNMENT_TOP;
+                closeBlackScreenUIBTN.isVisible =false;
+                advancedTextureFullScreen.addControl(closeBlackScreenUIBTN);
+                closeBlackScreenUIBTN.onPointerClickObservable.add((evt) => {
+                    blackScreenUI.isVisible = false;
+                    closeBlackScreenUIBTN.isVisible =false;
+                })
+                let closeBlackScreenUI = function(){
+                    blackScreenUI.isVisible = false;
+                };
+                let CreateBox = function(pos,rot,scaling,material,name){
+                    var box = BABYLON.MeshBuilder.CreateBox(name,{size:1},scene);
+                    box.position = pos;
+                    box.rotation = rot;
+                    box.scaling = scaling;
+                    box.material = material;
+                }
+                let CreatePlane = function(pos,rot,wt,ht,material,name){
+                   var plane = BABYLON.MeshBuilder.CreateGround(name, {width: wt , height: ht}, scene);
+                   plane.position = pos;
+                   plane.rotation =rot;
+                   plane.material = material;
+                }
+                let CreateHemiSphere = function(pos,rot,diaX,diaY,diaZ,material,name){
+                    var hemiSphere = BABYLON.MeshBuilder.CreateSphere(name, {diameterX : diaX,diameterY:diaY,diameterZ:diaZ,arc: 0.5, sideOrientation: BABYLON.Mesh.DOUBLESIDE});
+                    hemiSphere.position = pos;
+                    hemiSphere.rotation = rot;
+                    hemiSphere.material = material;
+                }
+                let CreateSemiCylinder = function(pos,rot,dia,ht,material,name){
+                    var semiCylinder = BABYLON.MeshBuilder.CreateCylinder(name, {height : ht,diameter : dia,arc: 0.5, sideOrientation: BABYLON.Mesh.DOUBLESIDE});
+                    semiCylinder.position = pos;
+                    semiCylinder.rotation = rot;
+                }
+                let CreateCircularPlane = function(pos,rot,dia,material,name){
+                    var circularPlane = BABYLON.MeshBuilder.CreateDisc(name,{diamter:dia});
+                    circularPlane.position = pos;
+                    circularPlane.rotation = rot;
+                    circularPlane.material = material;
+                }
+
+                let CreateCircularGroundPlane = function(pos,rot,dia,material,name){
+                    var circularPlane = BABYLON.MeshBuilder.CreateDisc(name,{diameter:dia});
+                    circularPlane.position = pos;
+                    circularPlane.rotation = rot;
+                    circularPlane.material = material;
+                    groundList.push(circularPlane);
+                }
+                let CreateSemiCircularPlane = function(pos,rot,dia,material,name){
+                    var semiCircularPlane = BABYLON.MeshBuilder.CreateDisc(name,{radius:dia*0.5,arc :0.5});
+                    semiCircularPlane.position = pos;
+                    semiCircularPlane.rotation = rot;
+                    semiCircularPlane.material = material;
+                }
+
+                let CreateSemiCircularGroundPlane = function(pos,rot,dia,material,name){
+                    var semiCircularGroundPlane = BABYLON.MeshBuilder.CreateDisc(name,{radius:dia*0.5,arc :0.5});
+                    semiCircularGroundPlane.position = pos;
+                    semiCircularGroundPlane.rotation = rot;
+                    semiCircularGroundPlane.material = material;
+                    groundList.push(semiCircularGroundPlane);
+                }
+
+                let CreateGroundPlane = function(pos,rot,wt,ht,material,name){
+                   var plane = BABYLON.MeshBuilder.CreateGround(name, {width: wt , height: ht}, scene);
+                   plane.position = pos;
+                   plane.rotation =rot;
+                   plane.material = material;
+                   groundList.push(plane);
+                }
+
+                let CreateCustomGroundPlane = function(shape,holes,material,name){
+                    var polygon = BABYLON.MeshBuilder.CreatePolygon(name, {shape:shape, holes:holes, sideOrientation: BABYLON.Mesh.DOUBLESIDE });
+                    polygon.material = material;
+                    groundList.push(polygon);
+                }
+                let CreatePhotoFrame = function(pos,rot,wt,ht,material,name){
+                    var baseDepth = 0.00002;
+                    var edgeDepth = 0.04;
+                    var edgeBreadth = 0.04;
+                    var baseScaling = new BABYLON.Vector3(wt,ht,baseDepth);
+                    var base = BABYLON.MeshBuilder.CreateBox(name,{size:1},scene);
+                    base.position = new BABYLON.Vector3(pos.x,pos.y,pos.z);
+                    base.rotation = rot;
+                    base.scaling = baseScaling;
+                    base.material = material;
+                    var edgeCorrectedPos = new BABYLON.Vector3(pos.x-(edgeDepth*0.5*Math.sin(rot.y)),pos.y,pos.z-(edgeDepth*0.5*Math.cos(rot.y)));
+                    var topEdge = BABYLON.MeshBuilder.CreateBox(name,{size:1},scene);
+                    topEdge.position = new BABYLON.Vector3(edgeCorrectedPos.x,edgeCorrectedPos.y+(ht*0.5),edgeCorrectedPos.z);
+                    topEdge.rotation = rot;
+                    topEdge.scaling = new BABYLON.Vector3(wt+edgeDepth,edgeBreadth,edgeDepth);
+                    topEdge.material = material;
+                    var botEdge = BABYLON.MeshBuilder.CreateBox(name,{size:1},scene);
+                    botEdge.position = new BABYLON.Vector3(edgeCorrectedPos.x,edgeCorrectedPos.y-(ht*0.5),edgeCorrectedPos.z);
+                    botEdge.rotation = rot;
+                    botEdge.scaling = new BABYLON.Vector3(wt+edgeDepth,edgeBreadth,edgeDepth);
+                    botEdge.material = material;
+                    var rightEdge = BABYLON.MeshBuilder.CreateBox(name,{size:1},scene);
+                    rightEdge.position = new BABYLON.Vector3(edgeCorrectedPos.x+(wt*0.5*Math.cos(rot.y)),edgeCorrectedPos.y,edgeCorrectedPos.z-(wt*0.5*Math.sin(rot.y)));
+                    rightEdge.rotation = new BABYLON.Vector3(rot.x,rot.y,Math.PI/2);
+                    rightEdge.scaling = new BABYLON.Vector3(ht,edgeBreadth,edgeDepth);
+                    rightEdge.material = material;
+                    var leftEdge = BABYLON.MeshBuilder.CreateBox(name,{size:1},scene);
+                    leftEdge.position = new BABYLON.Vector3(edgeCorrectedPos.x-(wt*0.5*Math.cos(rot.y)),edgeCorrectedPos.y,edgeCorrectedPos.z+(wt*0.5*Math.sin(rot.y)));
+                    leftEdge.rotation = new BABYLON.Vector3(rot.x,rot.y,Math.PI/2);
+                    leftEdge.scaling = new BABYLON.Vector3(ht,edgeBreadth,edgeDepth);
+                    leftEdge.material = material;
+                    return base;
+                }
+                let CreateImageFrame = function(pathOfImage,pos,rot,wt,ht,material,name){
+                    var baseUI = CreatePhotoFrame(pos,rot,wt,ht,material,name);
+                    var baseUITexture = BABYLON.GUI.AdvancedDynamicTexture.CreateForMesh(
+                    baseUI,
+                    1024,
+                    1024
+                    );
+                    var baseImage = new BABYLON.GUI.Image(name+"-image",pathOfImage);
+                    baseUITexture.addControl(baseImage);
+                    console.log("image frame created");
+                    return baseUI;
+                }
+                BABYLON.SceneLoader.ImportMeshAsync("", "Models/", "Postal_Room_07_5Jan.glb").then((result) => {
+                        for(let i=0;i<result.meshes.length;++i){
+                            result.meshes[i].isPickable = false;
+                            console.log("mesh name : "+result.meshes[i].name);
+                        }
+                        const model = result.meshes[0];
+                        model.position =  new BABYLON.Vector3(0,0,0);
+                        model.scaling = new BABYLON.Vector3(-5,5,5);
+                        model.rotation = new BABYLON.Vector3(0,Math.PI/2,0);
+                        model.isPickable =false;
+                });
+                BABYLON.SceneLoader.ImportMeshAsync("", "Models/", "Planks_02_5Jan.glb").then((result) => {
+                        for(let i=0;i<result.meshes.length;++i){
+                            result.meshes[i].isPickable = false;
+                            console.log("mesh name : "+result.meshes[i].name);
+                        }
+                        const model = result.meshes[0];
+                        model.position =  new BABYLON.Vector3(0,0,0);
+                        model.scaling = new BABYLON.Vector3(-5,5,5);
+                        model.rotation = new BABYLON.Vector3(0,Math.PI/2,0);
+                        model.isPickable =false;
+                });
+                CreateBox(new BABYLON.Vector3(-25,6,0),new BABYLON.Vector3(0,Math.PI/2,0),new BABYLON.Vector3(30,12,.01),wallMaterial,"wall");
+                CreateBox(new BABYLON.Vector3(10,6,0),new BABYLON.Vector3(0,Math.PI/2,0),new BABYLON.Vector3(30,12,.01),wallMaterial,"wall");
+                CreateBox(new BABYLON.Vector3(0,6,14.75),new BABYLON.Vector3(0,0,0),new BABYLON.Vector3(50,12,.01),wallMaterial,"wall");
+                CreateBox(new BABYLON.Vector3(0,6,-13.5),new BABYLON.Vector3(0,0,0),new BABYLON.Vector3(50,12,.01),wallMaterial,"wall");
+                CreatePlane(new BABYLON.Vector3(-12,-.01,0),new BABYLON.Vector3(0,0,0),40,40,groundZeroMaterial,"groundZero");
+                var shape = [ 
+		            new BABYLON.Vector3(9.5, 1, 13.5), 
+                    new BABYLON.Vector3(-24.5, 1, 13.5), 
+                    new BABYLON.Vector3(-24.5, 1, -13.5), 
+                    new BABYLON.Vector3(9.5, 1, -13.5)
+                ];
+                var holes =[];
+	            holes[0] = [ 
+                        new BABYLON.Vector3(-4, 1, 4),
+                        new BABYLON.Vector3(4, 1, 4),
+                        new BABYLON.Vector3(4, 1,-4),
+                        new BABYLON.Vector3(-4, 1, -4)
+                ];
+                holes[1] = [ 
+                        new BABYLON.Vector3(-11, 1, 1.75),
+                        new BABYLON.Vector3(-8.5, 1, 1.75),
+                        new BABYLON.Vector3(-8.5, 1,-1.75),
+                        new BABYLON.Vector3(-11, 1, -1.75)
+                ];
+                CreateCustomGroundPlane(shape,holes,groundMaterial,"ground1");
+                closeBlackScreenUI();
+                let gtIsOn = false;
+                let gtIndex =0;
+                let gtCounter =0;
+                let gtFactor =0;
+                let gtWaitTime = 5;
+                let gtPositions = [
+                    new BABYLON.Vector3 (0,2,-2.5)
+                ];
+                let gtWaitTimeFactors = [
+                    1
+                ];
+                let rotDiff = new BABYLON.Vector3(0,0,0);
+                let targetLookAt = new BABYLON.Vector3(0,0,0);
+                let gtLookAtPositions = [
+                    new BABYLON.Vector3(0,2,0)
+                ];
+                let gtPauseTour =function(){
+                    buttonGTmenuPlay.isVisible =true;
+                    buttonGTmenuPause.isVisible =false;
+                    gtIsOn = false;
+                }
+                let gtPlayTour = function(){
+                    buttonGTmenuPlay.isVisible =false;
+                    buttonGTmenuPause.isVisible =true;
+                    gtIsOn = true;
+                    targetPosition = new BABYLON.Vector3(gtPositions[gtIndex].x,camera.position.y,gtPositions[gtIndex].z);
+                    difference = new BABYLON.Vector3(targetPosition.x- camera.position.x,targetPosition.y- camera.position.y,targetPosition.z- camera.position.z);
+                    targetLookAt = new BABYLON.Vector3(gtLookAtPositions[gtIndex].x,camera.position.y,gtLookAtPositions[gtIndex].z);
+                    gtCounter =0;
+                    gtFactor = 1;
+                }
+                let gtStopTour = function(){
+                    buttonGTmenuPlay.isVisible =true;
+                    buttonGTmenuPause.isVisible =false;
+                    gtIsOn = false;
+                    gtIndex =0;
+                    gtCounter =0;
+                    gtFactor = 1;
+                }
+                let gtShowMenu = function(){
+                    buttonGTmenuClose.isVisible =true;
+                    if(gtIsOn){
+                        buttonGTmenuPlay.isVisible =false;
+                        buttonGTmenuPause.isVisible =true;
+                    } else {
+                        buttonGTmenuPlay.isVisible =true;
+                        buttonGTmenuPause.isVisible =false;
+                    }
+                    buttonGTmenuStop.isVisible =true;
+                    buttonGTmenuPrev.isVisible =true;
+                    buttonGTmenuNext.isVisible =true;
+                    buttonGTmenu.isVisible = false;
+                }
+                let gtHideMenu = function(){
+                    buttonGTmenu.isVisible =true;
+                    buttonGTmenuPlay.isVisible =false;
+                    buttonGTmenuPause.isVisible =false;
+                    buttonGTmenuStop.isVisible =false;
+                    buttonGTmenuPrev.isVisible =false;
+                    buttonGTmenuNext.isVisible =false;
+                    buttonGTmenuClose.isVisible = false;
+                }
+                let gtNextTarget = function (){
+                    gtIndex++;
+                    if(gtIndex>=gtPositions.length){
+                        gtIndex =0;
+                    }
+                    targetPosition = new BABYLON.Vector3(gtPositions[gtIndex].x,camera.position.y,gtPositions[gtIndex].z);
+                    difference = new BABYLON.Vector3(targetPosition.x- camera.position.x,targetPosition.y- camera.position.y,targetPosition.z- camera.position.z);
+                    targetLookAt = new BABYLON.Vector3(gtLookAtPositions[gtIndex].x,camera.position.y,gtLookAtPositions[gtIndex].z);
+                    gtCounter =0;
+                    gtFactor = gtWaitTimeFactors[gtIndex];
+                }
+                let gtPrevTarget = function (){
+                    gtIndex--;
+                    if(gtIndex<0){
+                        gtIndex =gtPositions.length -1;
+                    }
+                    targetPosition = new BABYLON.Vector3(gtPositions[gtIndex].x,camera.position.y,gtPositions[gtIndex].z);
+                    difference = new BABYLON.Vector3(targetPosition.x- camera.position.x,targetPosition.y- camera.position.y,targetPosition.z- camera.position.z);
+                    targetLookAt = new BABYLON.Vector3(gtLookAtPositions[gtIndex].x,camera.position.y,gtLookAtPositions[gtIndex].z);
+                    gtCounter =0;
+                    gtFactor = gtWaitTimeFactors[gtIndex];
+                }
+                gtHideMenu();
+                buttonGTmenu.onPointerClickObservable.add((evt) =>{
+                    gtShowMenu();
+                })
+                buttonGTmenuClose.onPointerClickObservable.add((evt) =>{
+                    gtHideMenu();
+                })
+                buttonGTmenuPlay.onPointerClickObservable.add((evt) =>{
+                    gtPlayTour();
+                })
+                buttonGTmenuPause.onPointerClickObservable.add((evt) =>{
+                    gtPauseTour();
+                })
+                buttonGTmenuStop.onPointerClickObservable.add((evt) =>{
+                    gtStopTour();
+                })
+                buttonGTmenuNext.onPointerClickObservable.add((evt) =>{
+                    gtNextTarget();
+                })
+                buttonGTmenuPrev.onPointerClickObservable.add((evt) =>{
+                    gtPrevTarget();
+                })
+                let footprintPositions = [
+                    new BABYLON.Vector3(6,0,10),//0
+                    new BABYLON.Vector3(0,0,10),
+                    new BABYLON.Vector3(-6,0,10),
+                    new BABYLON.Vector3(-5,0,0),
+                    new BABYLON.Vector3(-5,0,3),
+                    new BABYLON.Vector3(-13,0,0),
+                    new BABYLON.Vector3(-17,0,0),
+                    new BABYLON.Vector3(-21,0,0),
+                    new BABYLON.Vector3(-12.5,0,10),
+                    new BABYLON.Vector3(-16,0,10),
+                    new BABYLON.Vector3(-21,0,10),
+                    new BABYLON.Vector3(-14.5,0,5),
+                    new BABYLON.Vector3(-18.5,0,5)
+                ];
+
+                let footprintRotations = [
+                    new BABYLON.Vector3(0,0,0),//0
+                    new BABYLON.Vector3(0,0,0),
+                    new BABYLON.Vector3(0,0,0),
+                    new BABYLON.Vector3(0,-Math.PI/2,0),
+                    new BABYLON.Vector3(0,-Math.PI/2,0),
+                    new BABYLON.Vector3(0,Math.PI/2,0),
+                    new BABYLON.Vector3(0,0,0),
+                    new BABYLON.Vector3(0,-Math.PI/2,0),
+                    new BABYLON.Vector3(0,0,0),
+                    new BABYLON.Vector3(0,0,0),
+                    new BABYLON.Vector3(0,0,0),
+                    new BABYLON.Vector3(0,0,0),
+                    new BABYLON.Vector3(0,0,0)
+
+                ];
+                let ftLookAtPositions = [
+                    new BABYLON.Vector3(6,2,15),
+                    new BABYLON.Vector3(0,2,15),
+                    new BABYLON.Vector3(-6,2,15),
+                    new BABYLON.Vector3(-25,2,0),
+                    new BABYLON.Vector3(-25,2,3),
+                    new BABYLON.Vector3(25,2,0),
+                    new BABYLON.Vector3(-17,2,15),
+                    new BABYLON.Vector3(-25,2,0),
+                    new BABYLON.Vector3(-12.5,2,15),
+                    new BABYLON.Vector3(-16,2,15),
+                    new BABYLON.Vector3(-21,2,15),
+                    new BABYLON.Vector3(-14.5,2,15),
+                    new BABYLON.Vector3(-18.5,2,15)
+                ];
+                let inButtonTransition =false;
+                for(let i=0;i<footprintPositions.length;++i){
+                    var standingDistance = 0;
+                    var footprintUI = BABYLON.MeshBuilder.CreateBox("box",{size :1},scene);
+                    footprintUI.position = new BABYLON.Vector3(footprintPositions[i].x-(standingDistance*Math.sin(footprintRotations[i].y)),footprintPositions[i].y,footprintPositions[i].z-(standingDistance*Math.cos(footprintRotations[i].y)));
+                    console.log("("+footprintUI.position.x+","+camera.position.y+","+footprintUI.position.z+")");
+                    footprintUI.position.y = .15;
+                    footprintUI.rotation = new BABYLON.Vector3(Math.PI/2,footprintRotations[i].y,0);
+                    footprintUI.scaling = new BABYLON.Vector3(.6,.6,.0001);
+                    var footprintUITexture = BABYLON.GUI.AdvancedDynamicTexture.CreateForMesh(
+                    footprintUI,
+                    1024,
+                    1024
+                    );
+                    var footprintButton  = BABYLON.GUI.Button.CreateImageOnlyButton(
+                        "footprintButton",
+                        "Content/Common/footprintIcon.png"
+                    );
+                    footprintButton.pointerEnterAnimation= function(){};
+                    footprintButton.pointerOutAnimation = function(){};
+                    footprintButton.pointerUpAnimation = function(){};
+                    footprintButton.pointerDownAnimation = function(){};
+                    footprintUITexture.addControl(footprintButton);
+                    footprintButton.onPointerClickObservable.add((evt)=> {
+                        if(!inTransition && !gtIsOn){
+                            targetPosition = new BABYLON.Vector3(footprintPositions[i].x-(standingDistance*Math.sin(footprintRotations[i].y)),camera.position.y,footprintPositions[i].z-(standingDistance*Math.cos(footprintRotations[i].y)));
+                            difference = new BABYLON.Vector3(targetPosition.x- camera.position.x,targetPosition.y- camera.position.y,targetPosition.z- camera.position.z);
+                            targetLookAt = new BABYLON.Vector3(ftLookAtPositions[i].x,camera.position.y,ftLookAtPositions[i].z);    
+                            inButtonTransition =true;
+                        }
+                    })
+                }
+                let crossHair = BABYLON.Mesh.CreateBox("crosshairBox", 1,scene);
+                crossHair.scaling.z =0.01;
+                crossHair.material = new BABYLON.StandardMaterial("crossHairmaterial", scene);
+                crossHair.material.diffuseTexture = new BABYLON.Texture("Content/Common/Crosshairs/crosshair118.png", scene);
+                crossHair.material.diffuseColor = new BABYLON.Color3(0,0,0);
+                crossHair.material.diffuseTexture.hasAlpha = true;
+                crossHair.position = new BABYLON.Vector3(0, 0, -0.1);
+                crossHair.isPickable =false;
+                scene.onPointerDown = function (evt, pickResult) {
+                    if (groundList.includes(pickResult.pickedMesh)) {
+                        movingAction =true;
+                        trackingMesh = pickResult.pickedMesh;
+                        pointerPos.x = pickResult.pickedPoint.x;
+                        pointerPos.y = pickResult.pickedPoint.z;
+                    } else {
+                        movingAction =false;
+                        trackingMesh = emptyMesh;
+                    }
+                };
+                scene.onPointerUp = function (evt, pickResult) {
+                    if (pickResult.pickedMesh == trackingMesh && movingAction ) {
+                        var pickResultVector = new BABYLON.Vector2(pickResult.pickedPoint.x,pickResult.pickedPoint.z);
+                        var distance = pickResultVector.subtract(pointerPos).length();
+                        if(distance<.5 && !gtIsOn){
+                            targetPosition = new BABYLON.Vector3(pickResult.pickedPoint.x,camera.position.y,pickResult.pickedPoint.z);
+                            difference = new BABYLON.Vector3(targetPosition.x-camera.position.x,targetPosition.y-camera.position.y,targetPosition.z-camera.position.z);
+                            movingAction = false;
+                            inTransition =true;
+                            trackingMesh = emptyMesh;
+                        }
+                    }
+                };   
+                scene.onPointerMove = function (evt,pickResult) {
+                    var ray = scene.createPickingRay(scene.pointerX, scene.pointerY, BABYLON.Matrix.Identity(), null);
+                    var hit = scene.pickWithRay(ray);
+                    var pickedMesh = hit.pickedMesh;
+                    var pickedsPoint = hit.pickedPoint;
+                    if(pickedsPoint == null){return;}
+                    crossHair.position.x = pickedsPoint.x;
+                    crossHair.position.y = pickedsPoint.y;
+                    crossHair.position.z = pickedsPoint.z;
+                    var v1 = new BABYLON.Vector2(crossHair.position.x,crossHair.position.z);
+                    var v2 = new BABYLON.Vector2(camera.position.x,camera.position.z);
+                    var distanceCamCrosshair = v1.subtract(v2).length();
+                    if(distanceCamCrosshair>maxDistance){
+                        factor=maxScale;
+                        crossHair.scaling =new BABYLON.Vector3(factor*.1,factor*.1,factor*0.001);
+                    }
+                    else if(distanceCamCrosshair>minDistance){
+                        factor =minScale +((maxScale-minScale)*(distanceCamCrosshair-minDistance)/(maxDistance-minDistance));
+                        crossHair.scaling =new BABYLON.Vector3(factor*.1,factor*.1,factor*0.001);
+                    }else {
+                        factor=minScale;
+                        crossHair.scaling =new BABYLON.Vector3(factor*.1,factor*.1,factor*0.001);
+                    }
+                    if(groundList.includes(pickedMesh)){
+                        crossHair.position.y = pickedsPoint.y+.1;
+                        crossHair.rotation = new BABYLON.Vector3(Math.PI/2,0,0);
+                    } else if(pickedMesh.name =="roof"){
+                        crossHair.position.y = pickedsPoint.y-.1;
+                        crossHair.rotation = new BABYLON.Vector3(-Math.PI/2,0,0);
+                    } else if(pickedMesh.name =="groundZero"){
+                        crossHair.position.y = pickedsPoint.y+.1;
+                        crossHair.rotation = new BABYLON.Vector3(Math.PI/2,0,0);
+                    } 
+                    else {
+                        crossHair.rotation = pickedMesh.rotation;
+                    }
+                };
+                let inTransition = false;
+                let minDistanceTransition = 0.01;
+                let targetPosition = new BABYLON.Vector3(5.0,5.0,5.0);
+                let moveSpeed = .01;
+                let difference = new BABYLON.Vector3(0.0,0.0,0.0);
+                let distanceBWVectors = function(a, b) {
+                    var distance = 0.0;
+                    var dx = b.x-a.x;
+                    var dy = b.y-a.y;
+                    var dz = b.z-a.z;
+                    distance = Math.sqrt(Math.pow(dx,2)+Math.pow(dy,2)+Math.pow(dz,2));
+                    return distance;
+                } 
+                let setIndicatorPosition = function(){
+                    var x = camera.position.x;
+                    var y = camera.position.z;
+                    playerIndicator.leftInPixels = factorX +playerIndicator.widthInPixels+ x*conversionFactor;
+                    playerIndicator.topInPixels = factorY-playerIndicator.heightInPixels - y*conversionFactor;
+                }
+                let setIndicatorRotation = function(){
+                    playerIndicator.rotation = camera.rotation.y;
+                }
+                scene.registerBeforeRender(function () {
+                    setIndicatorRotation();
+                    if(gtIsOn){
+                        if(distanceBWVectors(camera.position,targetPosition)<minDistance){
+                            camera.position = targetPosition;
+                            camera.setTarget(new BABYLON.Vector3(targetLookAt.x,targetLookAt.y,targetLookAt.z));
+                            gtCounter++;
+                            setIndicatorPosition();
+                            if(gtCounter >gtFactor*gtWaitTime*60){
+                                gtNextTarget();
+                            }
+                        } else {
+                            camera.position = new BABYLON.Vector3((moveSpeed*difference.x)+ camera.position.x,camera.position.y,(moveSpeed*difference.z)+ camera.position.z); 
+                            camera.setTarget(new BABYLON.Vector3(targetLookAt.x,targetLookAt.y,targetLookAt.z));
+                            setIndicatorPosition();
+                        }
+                    }else  if(inButtonTransition){
+                        if(distanceBWVectors(camera.position,targetPosition)<minDistance){
+                            inButtonTransition = false;
+                            camera.position = targetPosition;
+                            camera.setTarget(new BABYLON.Vector3(targetLookAt.x,targetLookAt.y,targetLookAt.z));
+                            setIndicatorPosition();
+                        } else {
+                            camera.position = new BABYLON.Vector3((moveSpeed*difference.x)+ camera.position.x,camera.position.y,(moveSpeed*difference.z)+ camera.position.z);
+                            camera.setTarget(new BABYLON.Vector3(targetLookAt.x,targetLookAt.y,targetLookAt.z));
+                            setIndicatorPosition();
+                        }
+                    } 
+                    else if(inTransition){
+                        camera.position = new BABYLON.Vector3((moveSpeed*difference.x)+ camera.position.x,camera.position.y,(moveSpeed*difference.z)+ camera.position.z);
+                        setIndicatorPosition();
+                        if(distanceBWVectors(camera.position,targetPosition)<minDistance){
+                            inTransition = false;
+                            camera.position = targetPosition;
+                            setIndicatorPosition();
+                        }
+                    }
+                });
+                var environment = scene.createDefaultEnvironment({ enableGroundShadow: true, groundYBias: 2 });
+                environment.setMainColor(BABYLON.Color3.FromHexString("#74b9ff"))
+                var xr = await scene.createDefaultXRExperienceAsync({
+                   floorMeshes: [scene.getMeshByName("ground1"),scene.getMeshByName("ground2"),scene.getMeshByName("ground3"),scene.getMeshByName("ground4"),scene.getMeshByName("ground5"),scene.getMeshByName("ground6")] 
+                });
+                const teleportation = xr.teleportation;
+                teleportation.teleportationEnabled =true;
+                xr.baseExperience.sessionManager.onXRSessionEnded.add(()=>{
+                    crossHair.isVisible=true;
+                });
+                let vrHeight = 3;
+                let vrCam = xr.baseExperience.camera;
+                xr.baseExperience.onStateChangedObservable.add((state)=>{
+                    if(state === BABYLON.WebXRState.IN_XR){
+                       vrCam.position.y = vrHeight;
+                    }
+                });
+                vrCam.onAfterCameraTeleport.add((targetPosition) => {
+                    vrCam.position.y = vrHeight;
+                });
+                xr.input.onControllerAddedObservable.add((controller) => {
+                   controller.onMotionControllerInitObservable.add((motionController) => {
+                        motionController.onModelLoadedObservable.add(()=>{
+                            motionController.rootMesh.isPickable =false;
+                            crossHair.isVisible=false;
+                        });
+                        if (motionController.handness === 'right') {
+                            const xr_ids = motionController.getComponentIds();
+                            let triggerComponent = motionController.getComponent(xr_ids[0]);
+                            triggerComponent.onButtonStateChangedObservable.add(() => {
+                                if (triggerComponent.pressed) {
+                                }
+                            });
+                            let squeezeComponent = motionController.getComponent(xr_ids[1]);
+                            squeezeComponent.onButtonStateChangedObservable.add(() => {
+                                if (squeezeComponent.pressed) {
+                                }
+                            });
+                            let thumbstickComponent = motionController.getComponent(xr_ids[2]);
+                            thumbstickComponent.onButtonStateChangedObservable.add(() => {
+                                if (thumbstickComponent.pressed) {
+                                }
+                            });
+                            thumbstickComponent.onAxisValueChangedObservable.add((axes) => {
+                                
+                            });
+                            let abuttonComponent = motionController.getComponent(xr_ids[3]);
+                            abuttonComponent.onButtonStateChangedObservable.add(() => {
+                                if (abuttonComponent.pressed) {
+                                    camera.fov = fov_min;
+                                    zoomedIn =true;
+                                }
+                            });
+                            let bbuttonComponent = motionController.getComponent(xr_ids[4]);
+                            bbuttonComponent.onButtonStateChangedObservable.add(() => {
+                                if (bbuttonComponent.pressed) {
+                                    camera.fov = fov_max;
+                                    zoomedIn =false;
+                                }
+                            });
+                        }
+                        if (motionController.handness === 'left') {
+                            const xr_ids = motionController.getComponentIds();
+                            let triggerComponent = motionController.getComponent(xr_ids[0]);
+                            triggerComponent.onButtonStateChangedObservable.add(() => {
+                                if (triggerComponent.pressed) {
+                                }
+                            });
+                            let squeezeComponent = motionController.getComponent(xr_ids[1]);
+                            squeezeComponent.onButtonStateChangedObservable.add(() => {
+                                if (squeezeComponent.pressed) {
+                                }
+                            });
+                            let thumbstickComponent = motionController.getComponent(xr_ids[2]);
+                            thumbstickComponent.onButtonStateChangedObservable.add(() => {
+                                if (thumbstickComponent.pressed) {
+                                }
+                            });
+                            thumbstickComponent.onAxisValueChangedObservable.add((axes) => {
+                            });
+                            let xbuttonComponent = motionController.getComponent(xr_ids[3]);
+                            xbuttonComponent.onButtonStateChangedObservable.add(() => {
+                                if (xbuttonComponent.pressed) {
+                                }
+                            });
+                            let ybuttonComponent = motionController.getComponent(xr_ids[4]);
+                            ybuttonComponent.onButtonStateChangedObservable.add(() => {
+                                if (ybuttonComponent.pressed) {  
+                                }
+                            });
+                        }
+                   })
+                });
+                return scene;
+            };
+            window.initFunction = async function() {        
+                var asyncEngineCreation = async function() {
+                    try {
+                        return createDefaultEngine();
+                    } catch(e) {
+                        return createDefaultEngine();
+                    }
+                }
+                window.engine = await asyncEngineCreation();
+                if (!engine) throw 'engine should not be null.';
+                window.scene = await createScene();
+            };
+            initFunction().then(() => {sceneToRender = scene        
+                engine.runRenderLoop(function () {
+                    if (sceneToRender && sceneToRender.activeCamera) {
+                        sceneToRender.render();
+                    }
+                });
+            });
+            // Resize
+            window.addEventListener("resize", function () {
+                engine.resize();
+            });
+        </script>
+    </body>
+</html>
